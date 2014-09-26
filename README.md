@@ -33,10 +33,11 @@ then prepare the shared library with
 build\gyp\gyp --depth=. -Dlibrary=shared_library pomelo.gyp -DTO=pc
 ``` 
 
-open the pomelo.sln in Visual Studio and build the 'libpomelo' project. You'll then find the DLL files in the \default folder. Copy 'pomelo.dll' and 'jansson.dll' to your delphi pomelo project directory.
+open the pomelo.sln in Visual Studio and build the 'libpomelo' project. You'll then find the DLL files in the \default folder. Copy 'pomelo.dll' and 'jansson.dll' to your delphi pomelo executable directory.
 
 ##Known Bugs
-```pc_client_stop(Client)``` fails with an exception
+* ```pc_client_stop(Client)``` fails with an exception
+* example "echo2" fails
 
 ##Notice
-This interface is in beta state. Not all functions of libpomelo are made availabe for use. 
+This interface is in beta state.
