@@ -6,12 +6,12 @@
  * http://blog.spreendigital.de/
  *}
 
-unit libpomelo;
+unit Pomelo.Lib;
 
 interface
 
 uses
-  Windows, WinSock, jansson;
+  Windows, WinSock, Pomelo.Jansson;
 
 const
   PC_TYPE = 'c';

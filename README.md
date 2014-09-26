@@ -38,6 +38,7 @@ open the pomelo.sln in Visual Studio and build the 'libpomelo' project. You'll t
 ##Known Bugs
 * ```pc_client_stop(Client)``` fails with an exception
 * example "echo2" fails
+* example "echo3" fails
 
 ##Notice
 This interface is in beta state.

@@ -5,9 +5,9 @@ program echo2;
 {$R *.res}
 
 uses
-  System.SysUtils, WinSock,
-  libpomelo in '..\..\Source\libpomelo.pas',
-  jansson in '..\..\Source\jansson.pas';
+  System.SysUtils, WinApi.WinSock,
+  Pomelo.Lib in '..\..\Source\Pomelo.Lib.pas',
+  Pomelo.Jansson in '..\..\Source\Pomelo.Jansson.pas';
 
 const
   Ip = '127.0.0.1';

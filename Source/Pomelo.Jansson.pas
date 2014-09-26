@@ -1,4 +1,4 @@
-unit jansson;
+unit Pomelo.Jansson;
 
 {*
  * Copyright (c) 2009-2012 Petri Lehtinen <petri@digip.org>
