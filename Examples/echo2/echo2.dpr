@@ -20,7 +20,7 @@ var
   Conn_req: Ppc_connect_t;
   working: Integer;
 
-procedure on_connected(conn_req: Ppc_connect_t; status: Integer); cdecl stdcall;
+procedure on_connected(conn_req: Ppc_connect_t; status: Integer); cdecl;
 begin
   writeln(format('data = %p', [conn_req.data]));
   pc_connect_req_destroy(conn_req);
@@ -32,7 +32,7 @@ begin
 end;
 
 // request callback
-procedure on_request_cb(req: Ppc_request_t; status: Integer; resp: Pjson_t); cdecl stdcall;
+procedure on_request_cb(req: Ppc_request_t; status: Integer; resp: Pjson_t); cdecl;
 var
   Msg: Pjson_t;
   Value: String;
@@ -73,7 +73,7 @@ end;
 
 
 // disconnect event callback.
-procedure on_close(client: Ppc_client_t; const event: PAnsiChar; data: Pointer); cdecl stdcall;
+procedure on_close(client: Ppc_client_t; const event: PAnsiChar; data: Pointer); cdecl;
 begin
   writeln(format('client closed: %d.', [Integer(client.state)]));
 end;

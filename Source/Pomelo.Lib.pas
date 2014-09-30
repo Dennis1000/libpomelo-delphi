@@ -129,7 +129,7 @@ type
  * @param event event name that registered before.
  * @param data attach data of the event.
  *}
-  pc_event_cb = procedure(client: Ppc_client_t; const char: PAnsiChar; data: Pointer); cdecl stdcall;
+  pc_event_cb = procedure(client: Ppc_client_t; const char: PAnsiChar; data: Pointer); cdecl;
 
 {**
  * Connection established callback.
@@ -137,7 +137,7 @@ type
  * @param req connect request.
  * @param status connect status. 0 for ok and -1 for error.
  *}
-  pc_connect_cb = procedure(req: Ppc_connect_t; status: Integer); cdecl stdcall;
+  pc_connect_cb = procedure(req: Ppc_connect_t; status: Integer); cdecl;
 
 {**
  * Request callback.
@@ -146,7 +146,7 @@ type
  * @param  status request status. 0 for ok and -1 for error.
  * @param  resp   response message from server, NULL for error.
  *}
-  pc_request_cb = procedure(req: Ppc_request_t; status: Integer; resp: Pjson_t);cdecl stdcall;
+  pc_request_cb = procedure(req: Ppc_request_t; status: Integer; resp: Pjson_t);cdecl;
 
 {**
  * Notify callback.
@@ -154,7 +154,7 @@ type
  * @param req request instance.
  * @param status notify status. o for ok and -1 for error.
  *}
-  pc_notify_cb = procedure(req: Ppc_notify_t; status: Integer); cdecl stdcall;
+  pc_notify_cb = procedure(req: Ppc_notify_t; status: Integer); cdecl;
 
 {**
  * Handshake callback for client which would be fired during handshake phase and
@@ -164,7 +164,7 @@ type
  * @param msg customized handshake information from server.
  * @return 0 for ok and -1 for error and terminate the connection.
  *}
-  pc_handshake_cb = function(client: Ppc_client_t; msg: Pjson_t): Integer; cdecl stdcall;
+  pc_handshake_cb = function(client: Ppc_client_t; msg: Pjson_t): Integer; cdecl;
 
 {**
  * Message parse callback which would be fired when a new message arrived.
@@ -174,7 +174,7 @@ type
  * @param len length of the data.
  * @return the parse result or NULL for error.
  *}
-  pc_msg_parse_cb = function(client: Ppc_client_t; data: PAnsiChar; len: SIZE_T): Ppc_msg_t; cdecl stdcall;
+  pc_msg_parse_cb = function(client: Ppc_client_t; data: PAnsiChar; len: SIZE_T): Ppc_msg_t; cdecl;
 
 {**
  * Message parse done callback which would be fired when the the message has
@@ -183,7 +183,7 @@ type
  * @param client client instance.
  * @param msg message instance.
  *}
-  pc_msg_parse_done_cb = procedure(client: Ppc_client_t; msg: Ppc_msg_t); cdecl stdcall;
+  pc_msg_parse_done_cb = procedure(client: Ppc_client_t; msg: Ppc_msg_t); cdecl;
 
 {**
  * Message encode callback which would be fired when a new request or notify is
@@ -196,7 +196,7 @@ type
  * @param msg message content.
  * @return encode result, buf.len = -1 for error.
  *}
-  pc_msg_encode_cb = function(client: Ppc_client_t; reqId: Uint32_t; route: PAnsiChar; msg: Pjson_t): Ppc_buf_t; cdecl stdcall;
+  pc_msg_encode_cb = function(client: Ppc_client_t; reqId: Uint32_t; route: PAnsiChar; msg: Pjson_t): Ppc_buf_t; cdecl;
 
 {**
  * Message encode done callback which would be fired when the encode data has
@@ -206,9 +206,9 @@ type
  * @param client client instance.
  * @param buf encode result.
  *}
-  pc_msg_encode_done_cb = procedure(client: Ppc_client_t; buf: pc_buf_t); cdecl stdcall;
+  pc_msg_encode_done_cb = procedure(client: Ppc_client_t; buf: pc_buf_t); cdecl;
 
-  pc_proto_cb = procedure(client: Ppc_client_t; op: pc_proto_op; fileName: PAnsiChar; data: Pointer); cdecl stdcall;
+  pc_proto_cb = procedure(client: Ppc_client_t; op: pc_proto_op; fileName: PAnsiChar; data: Pointer); cdecl;
 
 {**
  * Simple structure for memory block.
@@ -357,7 +357,7 @@ type
  *
  * @return Pomelo client instance
  *}
-function pc_client_new: Ppc_client_t; cdecl stdcall;
+function pc_client_new: Ppc_client_t; cdecl;
 
 {**
  * Create and init Pomelo client instance with reconnect enable
@@ -371,14 +371,14 @@ function pc_client_new: Ppc_client_t; cdecl stdcall;
  * if 2 -> delay, 30 -> delay_max enable exponetial backoff, the reconnect delay will be
  * 2, 4, 8, 16, 30, 30 seconds...
  *}
-function pc_client_new_with_reconnect(delay, delay_max, exp_backoff: Integer): Ppc_client_t; cdecl stdcall;
+function pc_client_new_with_reconnect(delay, delay_max, exp_backoff: Integer): Ppc_client_t; cdecl;
 
 {**
  * Disconnect Pomelo client and reset all status back to initialted.
  *
  * @param client Pomelo client instance.
  *}
-procedure pc_client_disconnect(client: Ppc_client_t); cdecl stdcall;
+procedure pc_client_disconnect(client: Ppc_client_t); cdecl;
 
 {**
  * Stop the connection of the client. It is suitable for calling in the child
@@ -387,14 +387,14 @@ procedure pc_client_disconnect(client: Ppc_client_t); cdecl stdcall;
  *
  * @param client client instance.
  *}
-procedure pc_client_stop(client: Ppc_client_t); cdecl stdcall;
+procedure pc_client_stop(client: Ppc_client_t); cdecl;
 
 {**
  * Destroy and disconnect the connection of the client instance.
  *
  * @param client client instance.
  *}
-procedure pc_client_destroy(client: Ppc_client_t); cdecl stdcall;
+procedure pc_client_destroy(client: Ppc_client_t); cdecl;
 
 {**
  * Join and wait the worker child thread return. It is suitable for the
@@ -404,21 +404,21 @@ procedure pc_client_destroy(client: Ppc_client_t); cdecl stdcall;
  * @param client client instance.
  * @return 0 for ok or error code for error.
  *}
-function pc_client_join(client: Ppc_client_t): Integer cdecl stdcall;
+function pc_client_join(client: Ppc_client_t): Integer cdecl;
 
 {**
  * Create and initiate a request instance.
  *
  * @return req request instance
  *}
-function pc_request_new: Ppc_request_t cdecl stdcall;
+function pc_request_new: Ppc_request_t cdecl;
 
 {**
  * Destroy and release inner resource of a request instance.
  *
  * @param req request instance to be destroied.
  *}
-procedure pc_request_destroy(req: Ppc_request_t) cdecl stdcall;
+procedure pc_request_destroy(req: Ppc_request_t) cdecl;
 
 {**
  * Connect the client to the server which would create a worker child thread
@@ -428,7 +428,7 @@ procedure pc_request_destroy(req: Ppc_request_t) cdecl stdcall;
  * @param addr server address.
  * @return 0 or -1.
  *}
-function pc_client_connect(client: Ppc_client_t; var addr: sockaddr_in): Integer; cdecl stdcall;
+function pc_client_connect(client: Ppc_client_t; var addr: sockaddr_in): Integer; cdecl;
 
 {**
  * Connect the client to server just like pc_client_connect,
@@ -439,7 +439,7 @@ function pc_client_connect(client: Ppc_client_t; var addr: sockaddr_in): Integer
  * @param conn_req connect request which are allocated and initialized by pc_connect_req_new
  * @return 0 or -1
  *}
-function pc_client_connect2(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: pc_connect_cb): Integer; cdecl stdcall;
+function pc_client_connect2(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: pc_connect_cb): Integer; cdecl;
 
 {**
  *
@@ -448,7 +448,7 @@ function pc_client_connect2(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: p
  * @param addr address to which the connection is made
  * @return an instance of pc_connect_t, which should be released manually by user.
  *}
-function pc_connect_req_new(var addr: sockaddr_in): Ppc_connect_t; cdecl stdcall;
+function pc_connect_req_new(var addr: sockaddr_in): Ppc_connect_t; cdecl;
 
 {**
  * Destroy instance of pc_connect_t
@@ -456,7 +456,7 @@ function pc_connect_req_new(var addr: sockaddr_in): Ppc_connect_t; cdecl stdcall
  * @param conn_req pc_connect_t instance
  * @return none
  *}
-procedure pc_connect_req_destroy(conn_req: Ppc_connect_t); cdecl stdcall;
+procedure pc_connect_req_destroy(conn_req: Ppc_connect_t); cdecl;
 
 {**
  * Send rerquest to server.
@@ -471,21 +471,21 @@ procedure pc_connect_req_destroy(conn_req: Ppc_connect_t); cdecl stdcall;
  * @return 0 or -1
  *}
 function pc_request(client: Ppc_client_t; req: Ppc_request_t; const route: PAnsiChar;
-  msg: Pjson_t; cb: pc_request_cb): Integer; cdecl stdcall;
+  msg: Pjson_t; cb: pc_request_cb): Integer; cdecl;
 
 {**
  * Create and initiate notify instance.
  *
  * @return notify instance
  *}
-function pc_notify_new: Ppc_notify_t; cdecl stdcall;
+function pc_notify_new: Ppc_notify_t; cdecl;
 
 {**
  * Destroy and release inner resource of a notify instance.
  *
  * @param req notify instance to be destroied.
  *}
-procedure pc_notify_destroy(req: Ppc_notify_t); cdecl stdcall;
+procedure pc_notify_destroy(req: Ppc_notify_t); cdecl;
 
 {**
  * Send notify to server.
@@ -500,7 +500,7 @@ procedure pc_notify_destroy(req: Ppc_notify_t); cdecl stdcall;
  * @return 0 or -1
  *}
 function pc_notify(client: Ppc_client_t; req: Ppc_notify_t; const route: PAnsiChar;
-  msg: Pjson_t; cb: pc_notify_cb): Integer; cdecl stdcall;
+  msg: Pjson_t; cb: pc_notify_cb): Integer; cdecl;
 
 {**
  * Register a listener in the client.
@@ -511,7 +511,7 @@ function pc_notify(client: Ppc_client_t; req: Ppc_notify_t; const route: PAnsiCh
  * @return 0 or -1.
  *}
 function pc_add_listener(client: Ppc_client_t; const event: PAnsiChar;
-  event_cb: pc_event_cb): Integer; cdecl stdcall;
+  event_cb: pc_event_cb): Integer; cdecl;
 
 {**
  * Remove a listener in the client.
@@ -522,7 +522,7 @@ function pc_add_listener(client: Ppc_client_t; const event: PAnsiChar;
  * @return void.
  *}
 procedure pc_remove_listener(client: Ppc_client_t; const event: PAnsiChar;
-  var event_cb: pc_event_cb); cdecl stdcall;
+  var event_cb: pc_event_cb); cdecl;
 
 {**
  * Emit a event from the client.
@@ -531,7 +531,7 @@ procedure pc_remove_listener(client: Ppc_client_t; const event: PAnsiChar;
  * @param event event name.
  * @param data attach data of the event.
  *}
-procedure pc_emit_event(client: Ppc_client_t; const event: PAnsiChar; data: Pointer); cdecl stdcall;
+procedure pc_emit_event(client: Ppc_client_t; const event: PAnsiChar; data: Pointer); cdecl;
 
 {**
  * jansson memory malloc, free self-defined function.
@@ -539,7 +539,7 @@ procedure pc_emit_event(client: Ppc_client_t; const event: PAnsiChar; data: Poin
  * @param malloc_fn malloc function.
  * @param free_fn free function.
  *}
-procedure pc_json_set_alloc_funcs(malloc_fn: Pointer; free_fn: Pointer); cdecl stdcall;
+procedure pc_json_set_alloc_funcs(malloc_fn: Pointer; free_fn: Pointer); cdecl;
 
 {**
  * Init protobuf settings, set the read/write proto files directorys
@@ -548,7 +548,7 @@ procedure pc_json_set_alloc_funcs(malloc_fn: Pointer; free_fn: Pointer); cdecl s
  * @param proto_read_dir directory of proto files to read.
  * @param proto_write_dir directory of proto files to write.
  *}
-procedure pc_proto_init(client: Ppc_client_t; const proto_read_dir: PAnsiChar; const proto_write_dir: PAnsiChar); cdecl stdcall;
+procedure pc_proto_init(client: Ppc_client_t; const proto_read_dir: PAnsiChar; const proto_write_dir: PAnsiChar); cdecl;
 
 {**
  * Init protobuf settings, set the callback for read/write proto files
@@ -556,9 +556,9 @@ procedure pc_proto_init(client: Ppc_client_t; const proto_read_dir: PAnsiChar; c
  * @param client client instance.
  * @param proto_cb callback when read or write proto files.
  *}
-procedure pc_proto_init2(client: Ppc_client_t; proto_cb: pc_proto_cb); cdecl stdcall;
+procedure pc_proto_init2(client: Ppc_client_t; proto_cb: pc_proto_cb); cdecl;
 
-procedure pc_proto_copy(client: Ppc_client_t; proto_ver: Pjson_t; client_protos: Pjson_t; server_protos: Pjson_t); cdecl stdcall;
+procedure pc_proto_copy(client: Ppc_client_t; proto_ver: Pjson_t; client_protos: Pjson_t; server_protos: Pjson_t); cdecl;
 
 implementation
 

@@ -19,7 +19,7 @@ var
   Input: String;
 
 // request callback
-procedure on_request_cb(req: Ppc_request_t; status: Integer; resp: Pjson_t);cdecl stdcall;
+procedure on_request_cb(req: Ppc_request_t; status: Integer; resp: Pjson_t);cdecl;
 var
   Msg: Pjson_t;
   Value: String;
@@ -87,7 +87,8 @@ begin
       do_request(client, AnsiString(input));
     until False;
 
-    pc_client_stop(Client);
+    writeln('stop client.');
+    pc_client_destroy(Client);
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

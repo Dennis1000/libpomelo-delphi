@@ -54,20 +54,20 @@ type
 
 {* construction, destruction, reference counting *}
 
-function json_object: Pjson_t; cdecl stdcall;
-function json_string(const value: PAnsiChar): Pjson_t; cdecl stdcall;
-function json_string_value(string_: Pjson_t): PAnsiChar; cdecl stdcall;
+function json_object: Pjson_t; cdecl;
+function json_string(const value: PAnsiChar): Pjson_t; cdecl;
+function json_string_value(string_: Pjson_t): PAnsiChar; cdecl;
 
 function json_object_set(object_: Pjson_t; const key: PAnsiChar; value: Pjson_t): Integer; inline;
-function json_object_set_new(object_: Pjson_t; const key: PAnsiChar; value: PJson_t): Integer; cdecl stdcall;
+function json_object_set_new(object_: Pjson_t; const key: PAnsiChar; value: PJson_t): Integer; cdecl;
 function json_incref(json: Pjson_t): Pjson_t; inline;
 procedure json_decref(json: Pjson_t); inline;
 
 {* getters, setters, manipulation *}
-function json_object_get(object_: Pjson_t; const key: PAnsiChar): Pjson_t; cdecl stdcall;
+function json_object_get(object_: Pjson_t; const key: PAnsiChar): Pjson_t; cdecl;
 
 {* do not call json_delete directly *}
-procedure json_delete(json: Pjson_t); cdecl stdcall;
+procedure json_delete(json: Pjson_t); cdecl;
 
 implementation
 

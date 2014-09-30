@@ -36,7 +36,7 @@ implementation
 { TPomeloClient }
 
 // request callback
-procedure on_request_cb(req: Ppc_request_t; status: Integer; resp: Pjson_t);cdecl stdcall;
+procedure on_request_cb(req: Ppc_request_t; status: Integer; resp: Pjson_t);cdecl;
 var
   Msg: Pjson_t;
   PomeloClient: TPomeloClient;
