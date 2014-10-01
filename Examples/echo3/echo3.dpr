@@ -11,14 +11,20 @@ uses
   Pomelo.Client in '..\..\Source\Pomelo.Client.pas';
 
 const
-  Ip = '127.0.0.1';
-  Port = 3010;
+  IP = '127.0.0.1';
+  PORT = 3010;
+  MAX_LINE_CHARS = 1024;
+  END_STR = 'bye';
 
 type
   TEcho = class(TObject)
   private
+    Working: Integer;
     procedure DoRequest(Client: TPomeloClient; Value: String);
-    procedure OnRequestCallback(Sender: TObject; Request: Ppc_request_t; Status: Integer; Response: Pjson_t);
+    procedure OnRequest(Client: TPomeloClient; Request: Ppc_request_t; Status: Integer; Response: Pjson_t);
+    procedure OnConnect(Client: TPomeloClient; Request: Ppc_connect_t; Status: Integer);
+    procedure OnEvent(Client: TPomeloClient; const Event: String; Data: Pointer);
+    procedure OnHey(Client: TPomeloClient; const Event: String; Data: Pointer);
   protected
   public
     procedure Run;
@@ -29,6 +35,7 @@ type
 procedure TEcho.DoRequest(Client: TPomeloClient; Value: String);
 var
   Msg, Str: Pjson_t;
+  Data: Pointer;
 const
   Route = 'connector.helloHandler.echo';
 begin
@@ -39,14 +46,48 @@ begin
   // decref for json object
   json_decref(str);
 
-  Client.Request(Route, Msg);
+  // Add some client data
+  Data := Pointer($12345);
+  Client.Request(Route, Msg, Data);
 end;
 
-procedure TEcho.OnRequestCallback(Sender: TObject; Request: Ppc_request_t;
+procedure TEcho.OnConnect(Client: TPomeloClient; Request: Ppc_connect_t;
+  Status: Integer);
+begin
+  if Status = -1 then
+    writeln('Connected error.\n')
+  else
+    Working := 1;
+end;
+
+procedure TEcho.OnEvent(Client: TPomeloClient; const Event: String;
+  Data: Pointer);
+begin
+  writeln('OnEvent: ', Event);
+  writeln(format('data = %p', [Data]));
+end;
+
+procedure TEcho.OnHey(Client: TPomeloClient; const Event: String;
+  Data: Pointer);
+var
+  PushMsg: Pjson_t;
+  JsonStr: PAnsiChar;
+begin
+  PushMsg := Data;
+  JsonStr := json_dumps(PushMsg, 0);
+  writeln(format('on event: %s, serve push msg: %s', [Event, JsonStr]));
+  FreeMem(JsonStr);
+  // stop the working thread.
+  Client.Stop;
+end;
+
+
+procedure TEcho.OnRequest(Client: TPomeloClient; Request: Ppc_request_t;
   Status: Integer; Response: Pjson_t);
 var
   Value: String;
 begin
+  writeln(format('data = %p', [Request.data]));
   if Status = -1 then
     writeln('Fail to send request to server.')
   else
@@ -64,7 +105,10 @@ var
   Client: TPomeloClient;
 begin
   Client := TPomeloClient.Create;
-  Client.OnRequestCallback := OnRequestCallback;
+  Client.OnRequest := OnRequest;
+  Client.OnConnect := OnConnect;
+  Client.OnEvent := OnEvent;
+
   if Client.Initialize <> PC_ST_INITED then
   begin
     writeln('failed to initialize client');
@@ -72,8 +116,16 @@ begin
     Exit;
   end;
 
+  // add some event callback, use OnHey as event callback
+  Client.AddListener('onHey', OnHey);
+
+  // add a predefined listener, use Client.OnEvent as callback
+  Client.AddListener(PC_EVENT_DISCONNECT);
+
   // try to connect to server.
-  if not Client.Connect(Ip, Port) then
+  Client.Host := IP;
+  Client.Port := PORT;
+  if not Client.Connect then
   begin
     writeln('fail to connect server.');
     Client.Free;
@@ -83,8 +135,13 @@ begin
   writeln('Input a line to send message to server and input `bye` to exit.');
   repeat
     readln(Input);
-    if Input = 'bye' then
+
+    if Input = END_STR then
       Break;
+
+    if Length(Input) > MAX_LINE_CHARS then
+      Input := Copy(Input, 1, MAX_LINE_CHARS);
+
     DoRequest(Client, input);
   until False;
 

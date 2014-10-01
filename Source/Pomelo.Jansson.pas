@@ -69,6 +69,8 @@ function json_object_get(object_: Pjson_t; const key: PAnsiChar): Pjson_t; cdecl
 {* do not call json_delete directly *}
 procedure json_delete(json: Pjson_t); cdecl;
 
+function json_dumps(json: Pjson_t; flags: SIZE_T): PAnsiChar; cdecl;
+
 implementation
 
 function json_object_set(object_: Pjson_t; const key: PAnsiChar; value: Pjson_t): Integer; inline;
@@ -102,5 +104,6 @@ procedure json_delete; external DllName;
 function json_object_set_new; external DllName;
 function json_string_value; external DllName;
 function json_object_get; external DllName;
+function json_dumps; external DllName;
 
 end.

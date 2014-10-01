@@ -522,7 +522,7 @@ function pc_add_listener(client: Ppc_client_t; const event: PAnsiChar;
  * @return void.
  *}
 procedure pc_remove_listener(client: Ppc_client_t; const event: PAnsiChar;
-  var event_cb: pc_event_cb); cdecl;
+  event_cb: pc_event_cb); cdecl;
 
 {**
  * Emit a event from the client.
