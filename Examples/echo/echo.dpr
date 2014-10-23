@@ -10,7 +10,7 @@ uses
   Pomelo.Jansson in '..\..\Source\Pomelo.Jansson.pas';
 
 const
-  Ip = '127.0.0.1';
+  Ip = '192.168.167.119';
   Port = 3010;
 
 var
@@ -72,9 +72,9 @@ begin
     address.sin_addr.s_addr := inet_addr(PAnsiChar(AnsiString(Ip)));
 
    // try to connect to server.
-    if pc_client_connect(Client, address) <> 0 then
+    if pc_client_connect(Client, @address) <> 0 then
     begin
-      writeln('fail to connect server.');
+      writeln('fail to connect server ' + IP);
       pc_client_destroy(client);
       Exit;
     end;

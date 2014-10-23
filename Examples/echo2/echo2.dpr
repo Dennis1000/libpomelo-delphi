@@ -10,7 +10,7 @@ uses
   Pomelo.Jansson in '..\..\Source\Pomelo.Jansson.pas';
 
 const
-  Ip = '127.0.0.1';
+  Ip = '192.168.167.119';
   Port = 3010;
 
 var
@@ -92,9 +92,9 @@ begin
     address.sin_port := htons(Port);
     address.sin_addr.s_addr := inet_addr(PAnsiChar(AnsiString(Ip)));
 
-    Conn_req := pc_connect_req_new(address);
+    Conn_req := pc_connect_req_new(@address);
     //~ bring some private date on
-    Conn_req.data := Pointer($2013);
+    Conn_req.data := Pointer($12345);
 
     // add some event callback.
     pc_add_listener(client, PAnsiChar(PC_EVENT_DISCONNECT), on_close);

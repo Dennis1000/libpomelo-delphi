@@ -32,6 +32,7 @@ var
   Input: String;
 begin
   Echo := TEcho.Create;
+  Echo.Ip := '192.168.167.119';
   Echo.OnOutput := OnOutput;
   if not Echo.Connect then
   begin
