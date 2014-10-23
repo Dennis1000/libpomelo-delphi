@@ -1,3 +1,5 @@
+unit Pomelo.Lib;
+
 {**
  * Copyright (c) 2014 NetEase, Inc. and other Pomelo contributors
  * MIT Licensed.
@@ -6,14 +8,59 @@
  * http://blog.spreendigital.de/
  *}
 
-unit Pomelo.Lib;
-
 interface
 
+{$Z4}  // store delphi enums as 4 bytes
+
+// ***********************************
+// Windows declarations
+// ***********************************
+{$IF defined(MSWINDOWS)}
 uses
-  Windows, WinSock, Pomelo.Jansson;
+  System.Classes, Pomelo.Jansson, Winapi.Windows, Winapi.WinSock;
+
+type
+  Psockaddr_in = PSockAddrIn;
 
 const
+  PomeloLibraryName = 'libpomelo.dll'; {Do not Localize}
+
+// ***********************************
+// MacOs & iOS declarations
+// ***********************************
+{$ELSEIF defined(MACOS)}
+uses
+  System.Classes, Pomelo.Jansson, System.IOUtils, System.SysUtils,  Posix.NetinetIn;
+
+const
+  {$IFDEF IOS}
+    {$DEFINE STATICLIBRARY}
+    {$IFDEF CPUARM} // iOS device
+      PomeloLibraryName = 'libpomelo.a'; {Do not Localize}
+      UvLibraryName = 'libuv.a'; {Do not Localize}
+    {$ELSE} // iOS Simulator
+      PomeloLibraryName = 'libpomelo_sim.a'; {Do not Localize}
+      UvLibraryName = 'libuv_sim.a'; {Do not Localize}
+    {$ENDIF}
+  {$ELSE} // MacOS
+    PomeloLibraryName = 'libpomelo.dylib'; {Do not Localize}
+    UvLibraryName = 'libuv.dylib'; {Do not Localize}
+  {$ENDIF}
+
+// ***********************************
+// Android declarations
+// ***********************************
+{$ELSEIF defined(ANDROID)}
+uses
+  System.Classes, System.IOUtils, System.SysUtils, Pomelo.Jansson, Posix.SysSocket;
+
+type
+  Psockaddr_in = Psockaddr_storage;
+
+const
+  PomeloLibraryName = 'libpomelo.so'; {Do not Localize}
+{$ENDIF}
+
   PC_TYPE = 'c';
   PC_VERSION = '0.1.2';
 
@@ -26,14 +73,45 @@ const
   PC_PROTO_CLIENT = 'clientProtos';
   PC_PROTO_SERVER = 'serverProtos';
 
-type
-  {$Z4}  // store delphi enums as 4 bytes
-  uint32_t = uint32;
+  AF_INET         = 2;               { internetwork: UDP, TCP, etc. }
 
-{**
- * uv-win.h
- *}
-  uv_mutex_t = RTL_CRITICAL_SECTION;
+type
+  uint32_t = uint32;
+  ULONG = Cardinal;
+  ULONG_PTR = NativeUInt;
+  SIZE_T = ULONG_PTR;
+  u_short = Word;
+  u_long = Longint;
+  u_char = Byte; //AnsiChar;
+{
+  TSunB = packed record
+    s_b1, s_b2, s_b3, s_b4: Byte; //u_char;
+  end;
+
+  TSunW = packed record
+    s_w1, s_w2: word; // u_short;
+  end;
+
+  PInAddr = ^TInAddr;
+  in_addr = packed record
+    case integer of
+      0: (S_un_b: TSunB);
+      1: (S_un_w: TSunW);
+      2: (S_addr: LongWord);
+  end;
+  TInAddr = in_addr;
+
+  PSockAddrIn = ^sockaddr_in;
+  sockaddr_in = packed record
+    sin_family: u_short;
+    sin_family: u_short;
+    sin_port: u_short;
+    sin_addr: TSunB;
+    sin_zero: array[0..7] of u_char;
+  end;
+}
+
+  //TSockAddr_in = sockaddr_in;
 
   {**
    * It should be possible to cast uv_buf_t[] to WSABUF[]
@@ -41,7 +119,7 @@ type
    *}
   uv_buf_t = record
     ln: ULONG;
-    base: PAnsiChar;
+    base: MarshaledAString;
   end;
 
 {**
@@ -129,7 +207,7 @@ type
  * @param event event name that registered before.
  * @param data attach data of the event.
  *}
-  pc_event_cb = procedure(client: Ppc_client_t; const char: PAnsiChar; data: Pointer); cdecl;
+  pc_event_cb = procedure(client: Ppc_client_t; const char: MarshaledAString; data: Pointer); cdecl;
 
 {**
  * Connection established callback.
@@ -174,7 +252,7 @@ type
  * @param len length of the data.
  * @return the parse result or NULL for error.
  *}
-  pc_msg_parse_cb = function(client: Ppc_client_t; data: PAnsiChar; len: SIZE_T): Ppc_msg_t; cdecl;
+  pc_msg_parse_cb = function(client: Ppc_client_t; data: MarshaledAString; len: SIZE_T): Ppc_msg_t; cdecl;
 
 {**
  * Message parse done callback which would be fired when the the message has
@@ -196,7 +274,7 @@ type
  * @param msg message content.
  * @return encode result, buf.len = -1 for error.
  *}
-  pc_msg_encode_cb = function(client: Ppc_client_t; reqId: Uint32_t; route: PAnsiChar; msg: Pjson_t): Ppc_buf_t; cdecl;
+  pc_msg_encode_cb = function(client: Ppc_client_t; reqId: Uint32_t; route: MarshaledAString; msg: Pjson_t): Ppc_buf_t; cdecl;
 
 {**
  * Message encode done callback which would be fired when the encode data has
@@ -208,14 +286,14 @@ type
  *}
   pc_msg_encode_done_cb = procedure(client: Ppc_client_t; buf: pc_buf_t); cdecl;
 
-  pc_proto_cb = procedure(client: Ppc_client_t; op: pc_proto_op; fileName: PAnsiChar; data: Pointer); cdecl;
+  pc_proto_cb = procedure(client: Ppc_client_t; op: pc_proto_op; fileName: MarshaledAString; data: Pointer); cdecl;
 
 {**
  * Simple structure for memory block.
  * The pc_buf_s is cheap and could be passed by value.
  *}
-  pc_buf_s = packed record
-    base: PAnsiChar;
+  pc_buf_s = record
+    base: MarshaledAString;
     len: SIZE_T;
   end;
 
@@ -228,7 +306,7 @@ type
     state: pc_transport_state;
   end;
 
-  PC_REQ_FIELDS = packed record
+  PC_REQ_FIELDS = record
     {* private *}
     client: Ppc_client_t;
     transport: Pointer; // pc_transport_t *transport;
@@ -236,16 +314,16 @@ type
     data: Pointer;
   end;
 
-  PC_TCP_REQ_FIELDS = packed record
+  PC_TCP_REQ_FIELDS = record
     {* public *}
-    route: PAnsiChar;
+    route: MarshaledAString;
     msg: Pjson_t;
   end;
 
 {**
  * The abstract base class of all async request in Pomelo client.
  *}
-  pc_req_s = packed record
+  pc_req_s = record
     //PC_REQ_FIELDS
     {* private *}
     client: Ppc_client_t;
@@ -257,7 +335,7 @@ type
 {**
  * The abstract base class of all tcp async request and a subclass of pc_req_t.
  *}
-  pc_tcp_req_s = packed record
+  pc_tcp_req_s = record
    //PC_REQ_FIELDS
     {* private *}
     client: Ppc_client_t;
@@ -266,14 +344,14 @@ type
     data: Pointer;
    //PC_TCP_REQ_FIELDS
     {* public *}
-    route: PAnsiChar;
+    route: MarshaledAString;
     msg: Pjson_t;
   end;
 
 {**
  * Pomelo client instance
  *}
-  pc_client_s = packed record
+  pc_client_s = record
     {* public *}
     state: pc_client_state;
     {* private *}
@@ -293,7 +371,7 @@ type
     type_: pc_req_type;
     data: Pointer;
     {* public *}
-    address: PSockAddrIn;
+    address: Psockaddr_in;
     cb: pc_connect_cb;
     {* private *}
     socket: Pointer; //uv_tcp_t *socket;
@@ -304,7 +382,7 @@ type
  * Pomelo request class is a subclass of pc_tcp_req_t.
  * Request is the async context for a Pomelo request to server.
  *}
-  pc_request_s  = packed record
+  pc_request_s  = record
     //PC_REQ_FIELDS;
     {* private *}
     client: Ppc_client_t;
@@ -313,7 +391,7 @@ type
     data: Pointer;
     //PC_TCP_REQ_FIELDS
     {* public *}
-    route: PAnsiChar;
+    route: MarshaledAString;
     msg: Pjson_t;
     //
     id: Uint32_t;
@@ -335,7 +413,7 @@ type
     data: Pointer;
     //PC_TCP_REQ_FIELDS
     {* public *}
-    route: PAnsiChar;
+    route: MarshaledAString;
     msg: Pjson_t;
     //
     cb: pc_notify_cb;
@@ -345,19 +423,28 @@ type
 {**
  * Message structure.
  *}
-  pc_msg_s = packed record
+  pc_msg_s = record
     id: uint32_t;
-    route: PAnsiChar;
+    route: MarshaledAString;
     msg: Pjson_t;
   end;
   pc_msg_t = pc_msg_s;
+
+// Use procedure entries as variables (only if dynamic library)
+{$IFNDEF STATICLIBRARY}
+var
+{$ENDIF}
 
 {**
  * Create and initiate Pomelo client intance.
  *
  * @return Pomelo client instance
  *}
-function pc_client_new: Ppc_client_t; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_client_new: Ppc_client_t; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_new: function: Ppc_client_t; cdecl;
+{$ENDIF}
 
 {**
  * Create and init Pomelo client instance with reconnect enable
@@ -371,14 +458,22 @@ function pc_client_new: Ppc_client_t; cdecl;
  * if 2 -> delay, 30 -> delay_max enable exponetial backoff, the reconnect delay will be
  * 2, 4, 8, 16, 30, 30 seconds...
  *}
-function pc_client_new_with_reconnect(delay, delay_max, exp_backoff: Integer): Ppc_client_t; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_client_new_with_reconnect(delay, delay_max, exp_backoff: Integer): Ppc_client_t; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_new_with_reconnect: function(delay, delay_max, exp_backoff: Integer): Ppc_client_t; cdecl;
+{$ENDIF}
 
 {**
  * Disconnect Pomelo client and reset all status back to initialted.
  *
  * @param client Pomelo client instance.
  *}
-procedure pc_client_disconnect(client: Ppc_client_t); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_client_disconnect(client: Ppc_client_t); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_disconnect: procedure(client: Ppc_client_t); cdecl;
+{$ENDIF}
 
 {**
  * Stop the connection of the client. It is suitable for calling in the child
@@ -387,14 +482,22 @@ procedure pc_client_disconnect(client: Ppc_client_t); cdecl;
  *
  * @param client client instance.
  *}
-procedure pc_client_stop(client: Ppc_client_t); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_client_stop(client: Ppc_client_t); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_stop: procedure(client: Ppc_client_t); cdecl;
+{$ENDIF}
 
 {**
  * Destroy and disconnect the connection of the client instance.
  *
  * @param client client instance.
  *}
-procedure pc_client_destroy(client: Ppc_client_t); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_client_destroy(client: Ppc_client_t); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_destroy: procedure(client: Ppc_client_t); cdecl;
+{$ENDIF}
 
 {**
  * Join and wait the worker child thread return. It is suitable for the
@@ -404,21 +507,33 @@ procedure pc_client_destroy(client: Ppc_client_t); cdecl;
  * @param client client instance.
  * @return 0 for ok or error code for error.
  *}
-function pc_client_join(client: Ppc_client_t): Integer cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_client_join(client: Ppc_client_t): Integer cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_join: function(client: Ppc_client_t): Integer cdecl;
+{$ENDIF}
 
 {**
  * Create and initiate a request instance.
  *
  * @return req request instance
  *}
-function pc_request_new: Ppc_request_t cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_request_new: Ppc_request_t cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_request_new: function: Ppc_request_t cdecl;
+{$ENDIF}
 
 {**
  * Destroy and release inner resource of a request instance.
  *
  * @param req request instance to be destroied.
  *}
-procedure pc_request_destroy(req: Ppc_request_t) cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_request_destroy(req: Ppc_request_t) cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_request_destroy: procedure(req: Ppc_request_t) cdecl;
+{$ENDIF}
 
 {**
  * Connect the client to the server which would create a worker child thread
@@ -428,7 +543,11 @@ procedure pc_request_destroy(req: Ppc_request_t) cdecl;
  * @param addr server address.
  * @return 0 or -1.
  *}
-function pc_client_connect(client: Ppc_client_t; var addr: sockaddr_in): Integer; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_client_connect(client: Ppc_client_t; addr: Psockaddr_in): Integer; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_connect: function(client: Ppc_client_t; addr: Psockaddr_in): Integer; cdecl;
+{$ENDIF}
 
 {**
  * Connect the client to server just like pc_client_connect,
@@ -439,7 +558,11 @@ function pc_client_connect(client: Ppc_client_t; var addr: sockaddr_in): Integer
  * @param conn_req connect request which are allocated and initialized by pc_connect_req_new
  * @return 0 or -1
  *}
-function pc_client_connect2(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: pc_connect_cb): Integer; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_client_connect2(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: pc_connect_cb): Integer; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_client_connect2: function(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: pc_connect_cb): Integer; cdecl;
+{$ENDIF}
 
 {**
  *
@@ -448,7 +571,11 @@ function pc_client_connect2(client: Ppc_client_t; conn_req: Ppc_connect_t; cb: p
  * @param addr address to which the connection is made
  * @return an instance of pc_connect_t, which should be released manually by user.
  *}
-function pc_connect_req_new(var addr: sockaddr_in): Ppc_connect_t; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_connect_req_new(addr: Psockaddr_in): Ppc_connect_t; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_connect_req_new: function(addr: Psockaddr_in): Ppc_connect_t; cdecl;
+{$ENDIF}
 
 {**
  * Destroy instance of pc_connect_t
@@ -456,7 +583,11 @@ function pc_connect_req_new(var addr: sockaddr_in): Ppc_connect_t; cdecl;
  * @param conn_req pc_connect_t instance
  * @return none
  *}
-procedure pc_connect_req_destroy(conn_req: Ppc_connect_t); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_connect_req_destroy(conn_req: Ppc_connect_t); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_connect_req_destroy: procedure(conn_req: Ppc_connect_t); cdecl;
+{$ENDIF}
 
 {**
  * Send rerquest to server.
@@ -470,22 +601,35 @@ procedure pc_connect_req_destroy(conn_req: Ppc_connect_t); cdecl;
  * @param cb request callback
  * @return 0 or -1
  *}
-function pc_request(client: Ppc_client_t; req: Ppc_request_t; const route: PAnsiChar;
-  msg: Pjson_t; cb: pc_request_cb): Integer; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_request(client: Ppc_client_t; req: Ppc_request_t; const route: MarshaledAString;
+    msg: Pjson_t; cb: pc_request_cb): Integer; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_request: function(client: Ppc_client_t; req: Ppc_request_t; const route: MarshaledAString;
+    msg: Pjson_t; cb: pc_request_cb): Integer; cdecl;
+{$ENDIF}
 
 {**
  * Create and initiate notify instance.
  *
  * @return notify instance
  *}
-function pc_notify_new: Ppc_notify_t; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_notify_new: Ppc_notify_t; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_notify_new: function: Ppc_notify_t; cdecl;
+{$ENDIF}
 
 {**
  * Destroy and release inner resource of a notify instance.
  *
  * @param req notify instance to be destroied.
  *}
-procedure pc_notify_destroy(req: Ppc_notify_t); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_notify_destroy(req: Ppc_notify_t); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_notify_destroy: procedure(req: Ppc_notify_t); cdecl;
+{$ENDIF}
 
 {**
  * Send notify to server.
@@ -499,8 +643,13 @@ procedure pc_notify_destroy(req: Ppc_notify_t); cdecl;
  * @param cb notify callback
  * @return 0 or -1
  *}
-function pc_notify(client: Ppc_client_t; req: Ppc_notify_t; const route: PAnsiChar;
-  msg: Pjson_t; cb: pc_notify_cb): Integer; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_notify(client: Ppc_client_t; req: Ppc_notify_t; const route: MarshaledAString;
+    msg: Pjson_t; cb: pc_notify_cb): Integer; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_notify: function(client: Ppc_client_t; req: Ppc_notify_t; const route: MarshaledAString;
+    msg: Pjson_t; cb: pc_notify_cb): Integer; cdecl;
+{$ENDIF}
 
 {**
  * Register a listener in the client.
@@ -510,8 +659,13 @@ function pc_notify(client: Ppc_client_t; req: Ppc_notify_t; const route: PAnsiCh
  * @param event_cb event callback.
  * @return 0 or -1.
  *}
-function pc_add_listener(client: Ppc_client_t; const event: PAnsiChar;
-  event_cb: pc_event_cb): Integer; cdecl;
+{$IFDEF STATICLIBRARY}
+  function pc_add_listener(client: Ppc_client_t; const event: MarshaledAString;
+    event_cb: pc_event_cb): Integer; cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_add_listener: function(client: Ppc_client_t; const event: MarshaledAString;
+    event_cb: pc_event_cb): Integer; cdecl;
+{$ENDIF}
 
 {**
  * Remove a listener in the client.
@@ -521,8 +675,13 @@ function pc_add_listener(client: Ppc_client_t; const event: PAnsiChar;
  * @param event_cb event callback.
  * @return void.
  *}
-procedure pc_remove_listener(client: Ppc_client_t; const event: PAnsiChar;
-  event_cb: pc_event_cb); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_remove_listener(client: Ppc_client_t; const event: MarshaledAString;
+    event_cb: pc_event_cb); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_remove_listener: procedure(client: Ppc_client_t; const event: MarshaledAString;
+    event_cb: pc_event_cb); cdecl;
+{$ENDIF}
 
 {**
  * Emit a event from the client.
@@ -531,7 +690,11 @@ procedure pc_remove_listener(client: Ppc_client_t; const event: PAnsiChar;
  * @param event event name.
  * @param data attach data of the event.
  *}
-procedure pc_emit_event(client: Ppc_client_t; const event: PAnsiChar; data: Pointer); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_emit_event(client: Ppc_client_t; const event: MarshaledAString; data: Pointer); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_emit_event: procedure(client: Ppc_client_t; const event: MarshaledAString; data: Pointer); cdecl;
+{$ENDIF}
 
 {**
  * jansson memory malloc, free self-defined function.
@@ -539,7 +702,11 @@ procedure pc_emit_event(client: Ppc_client_t; const event: PAnsiChar; data: Poin
  * @param malloc_fn malloc function.
  * @param free_fn free function.
  *}
-procedure pc_json_set_alloc_funcs(malloc_fn: Pointer; free_fn: Pointer); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_json_set_alloc_funcs(malloc_fn: Pointer; free_fn: Pointer); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_json_set_alloc_funcs: procedure(malloc_fn: Pointer; free_fn: Pointer); cdecl;
+{$ENDIF}
 
 {**
  * Init protobuf settings, set the read/write proto files directorys
@@ -548,7 +715,11 @@ procedure pc_json_set_alloc_funcs(malloc_fn: Pointer; free_fn: Pointer); cdecl;
  * @param proto_read_dir directory of proto files to read.
  * @param proto_write_dir directory of proto files to write.
  *}
-procedure pc_proto_init(client: Ppc_client_t; const proto_read_dir: PAnsiChar; const proto_write_dir: PAnsiChar); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_proto_init(client: Ppc_client_t; const proto_read_dir: MarshaledAString; const proto_write_dir: MarshaledAString); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_proto_init: procedure(client: Ppc_client_t; const proto_read_dir: MarshaledAString; const proto_write_dir: MarshaledAString); cdecl;
+{$ENDIF}
 
 {**
  * Init protobuf settings, set the callback for read/write proto files
@@ -556,37 +727,97 @@ procedure pc_proto_init(client: Ppc_client_t; const proto_read_dir: PAnsiChar; c
  * @param client client instance.
  * @param proto_cb callback when read or write proto files.
  *}
-procedure pc_proto_init2(client: Ppc_client_t; proto_cb: pc_proto_cb); cdecl;
+{$IFDEF STATICLIBRARY}
+  procedure pc_proto_init2(client: Ppc_client_t; proto_cb: pc_proto_cb); cdecl; external PomeloLibraryName;
+  procedure pc_proto_copy(client: Ppc_client_t; proto_ver: Pjson_t; client_protos: Pjson_t; server_protos: Pjson_t); cdecl; external PomeloLibraryName;
+{$ELSE}
+  pc_proto_init2: procedure(client: Ppc_client_t; proto_cb: pc_proto_cb); cdecl;
+  pc_proto_copy: procedure(client: Ppc_client_t; proto_ver: Pjson_t; client_protos: Pjson_t; server_protos: Pjson_t); cdecl;
+{$ENDIF}
 
-procedure pc_proto_copy(client: Ppc_client_t; proto_ver: Pjson_t; client_protos: Pjson_t; server_protos: Pjson_t); cdecl;
+var
+  ErrorLog: TStringList; // LoadLibrary ErrorLog
 
 implementation
 
-const
-  DllName = 'libpomelo.dll';
+{$IFDEF STATICLIBRARY}
+// Assure UV and Jansson are linked before
+function uv_version: Integer; cdecl; external UvLibraryName;
+function json_object: Pointer; cdecl; external JanssonLibraryName;
+{$ENDIF}
 
-function pc_client_new; external DllName;
-function pc_client_new_with_reconnect; external DllName;
-procedure pc_client_disconnect; external DllName;
-procedure pc_client_stop; external DllName;
-procedure pc_client_destroy; external DllName;
-function pc_client_join; external DllName;
-function pc_request_new; external DllName;
-procedure pc_request_destroy; external DllName;
-function pc_client_connect; external DllName;
-function pc_client_connect2; external DllName;
-function pc_connect_req_new; external DllName;
-procedure pc_connect_req_destroy; external DllName;
-function pc_request; external DllName;
-function pc_notify_new; external DllName;
-procedure pc_notify_destroy; external DllName;
-function pc_notify; external DllName;
-function pc_add_listener; external DllName;
-procedure pc_remove_listener; external DllName;
-procedure pc_emit_event; external DllName;
-procedure pc_json_set_alloc_funcs; external DllName;
-procedure pc_proto_init; external DllName;
-procedure pc_proto_init2; external DllName;
-procedure pc_proto_copy; external DllName;
+var
+  LibraryHandle: THandle;
 
+function GetLibraryFolder: String;
+begin
+{$IFDEF MSWINDOWS}
+  Result := '';
+{$ELSE}
+  Result := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetLibraryPath);
+{$ENDIF}
+  //Result := '@executable_path/';
+end;
+
+function LibraryAvailable: Boolean;
+begin
+  result := LibraryHandle <> 0;
+end;
+
+function GetAddress(Name: String): Pointer;
+begin
+  Result := GetProcAddress(LibraryHandle, PWideChar(Name));
+  if Result = NIL then
+    ErrorLog.Add('Entry point "' + Name + '" not found');
+end;
+
+{$IFNDEF STATICLIBRARY}
+procedure LoadExternal;
+begin
+  LibraryHandle := LoadLibrary(PChar(GetLibraryFolder + PomeloLibraryName));
+  if not LibraryAvailable then
+  begin
+    ErrorLog.Add('Library "' + GetLibraryFolder + PomeloLibraryName + '" not found');
+    Exit;
+  end;
+
+  pc_client_new := GetAddress('pc_client_new');
+  pc_client_new_with_reconnect := GetAddress('pc_client_new_with_reconnect');
+  pc_client_disconnect := GetAddress('pc_client_disconnect');
+  pc_client_stop := GetAddress('pc_client_stop');
+  pc_client_destroy := GetAddress('pc_client_destroy');
+  pc_client_join := GetAddress('pc_client_join');
+  pc_request_new := GetAddress('pc_request_new');
+  pc_request_destroy := GetAddress('pc_request_destroy');
+  pc_client_connect := GetAddress('pc_client_connect');
+  pc_client_connect2 := GetAddress('pc_client_connect2');
+  pc_connect_req_new := GetAddress('pc_connect_req_new');
+  pc_connect_req_destroy := GetAddress('pc_connect_req_destroy');
+  pc_request := GetAddress('pc_request');
+  pc_notify_new := GetAddress('pc_notify_new');
+  pc_notify_destroy := GetAddress('pc_notify_destroy');
+  pc_notify := GetAddress('pc_notify');
+  pc_add_listener := GetAddress('pc_add_listener');
+  pc_remove_listener := GetAddress('pc_remove_listener');
+  pc_emit_event := GetAddress('pc_emit_event');
+  pc_json_set_alloc_funcs := GetAddress('pc_json_set_alloc_funcs');
+  pc_proto_init := GetAddress('pc_proto_init');
+  pc_proto_init2 := GetAddress('pc_proto_init2');
+  pc_proto_copy := GetAddress('pc_proto_copy');
+end;
+{$ENDIF}
+
+
+initialization
+  LibraryHandle := 0;
+  ErrorLog := TStringList.Create;
+  {$IFNDEF STATICLIBRARY}
+  LoadExternal;
+  {$ENDIF}
+
+finalization
+  ErrorLog.Free;
+  if LibraryHandle <> 0 then
+    FreeLibrary(LibraryHandle);
 end.
+

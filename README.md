@@ -16,24 +16,12 @@ You'll find the examples in \examples
 
 ##Build
 
-###Prerequisite
+* [How to compile libpomelo for Android](http://blog.spreendigital.de/2014/10/23/how-to-compile-libpomelo-for-android/)
+* [How to compile libpomelo for iOS](http://blog.spreendigital.de/2014/10/13/how-to-compile-libpomelo-for-ios/)
+* [How to compile lipomelo as a Windows DLL](http://blog.spreendigital.de/2014/10/20/how-to-compile-libpomelo-as-a-windows-dll/)
+ 
 
-Open git bash, switch to your project directory and type in
 
-```
-git clone https://github.com/NetEase/libpomelo
-cd libpomelo
-mkdir build
-git clone https://github.com/martine/gyp.git build/gyp
-```    
-
-then prepare the shared library with
-
-```
-build\gyp\gyp --depth=. -Dlibrary=shared_library pomelo.gyp -DTO=pc
-``` 
-
-open the pomelo.sln in Visual Studio and build the 'libpomelo' project. You'll then find the DLL files in the \default folder. Copy 'pomelo.dll' and 'jansson.dll' to your delphi pomelo executable directory.
 
 ##Known Bugs
 * ~~```pc_client_stop(Client)``` fails with an exception~~

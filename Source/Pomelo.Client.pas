@@ -11,7 +11,26 @@ unit Pomelo.Client;
 interface
 
 uses
-  Generics.Defaults, Generics.Collections, Pomelo.Lib, Pomelo.Jansson, WinApi.Winsock, WinApi.Windows;
+  System.Classes, Generics.Defaults, Generics.Collections, Pomelo.Lib, Pomelo.Jansson, System.SysUtils,
+
+// ***********************************
+// Windows units
+// ***********************************
+{$IF defined(MSWINDOWS)}
+  Winapi.Windows, Winapi.WinSock;
+
+// ***********************************
+// MacOs & iOS units
+// ***********************************
+{$ELSEIF defined(MACOS)}
+   System.IOUtils, Posix.ArpaInet, Posix.NetinetIn;
+
+// ***********************************
+// Android units
+// ***********************************
+{$ELSEIF defined(ANDROID)}
+  System.IOUtils, Posix.ArpaInet, Posix.NetinetIn;
+{$ENDIF}
 
 type
   TPomeloClient = class;
@@ -22,11 +41,11 @@ type
   TPomeloClientOnRequest = procedure(Client: TPomeloClient; Request: Ppc_request_t; Status: Integer; Response: Pjson_t) of object;
   TPomeloClientOnNotify = procedure(Client: TPomeloClient; Notify: Ppc_notify_t; Status: Integer) of object;
   TPomeloClientOnHandshake = function(Client: TPomeloClient; Msg: Pjson_t): Integer of object;
-  TPomeloClientOnMsgParse = function(Client: TPomeloClient; Data: PAnsiChar; Len: SIZE_T): Ppc_msg_t of object;
+  TPomeloClientOnMsgParse = function(Client: TPomeloClient; Data: MarshaledAString; Len: SIZE_T): Ppc_msg_t of object;
   TPomeloClientOnMsgParseDone = procedure(Client: TPomeloClient; Msg: Ppc_msg_t) of object;
-  TPomeloClientOnMsgEncode = function(Client: TPomeloClient; ReqId: Uint32_t; Route: PAnsiChar; Msg: Pjson_t): Ppc_buf_t of object;
+  TPomeloClientOnMsgEncode = function(Client: TPomeloClient; ReqId: Uint32_t; Route: MarshaledAString; Msg: Pjson_t): Ppc_buf_t of object;
   TPomeloClientOnMsgEncodeDone = procedure(Client: TPomeloClient; Buf: pc_buf_t) of object;
-  TPomeloClientOnProto = procedure(Client: TPomeloClient; Op: pc_proto_op; FileName: PAnsiChar; Data: Pointer) of object;
+  TPomeloClientOnProto = procedure(Client: TPomeloClient; Op: pc_proto_op; FileName: MarshaledAString; Data: Pointer) of object;
 
   TPomeloRequest = class
     Request: Ppc_request_t;
@@ -34,6 +53,9 @@ type
     Data: Pointer;
     OnRequest: TPomeloClientOnRequest;
   end;
+
+  TPomeloRequestList = class(TObjectList<TPomeloRequest>);
+
 
   TPomeloConnect = class
     Request: Ppc_connect_t;
@@ -47,11 +69,6 @@ type
     OnEvent: TPomeloClientOnEvent;
   end;
 
-  TPomeloEventListenerObjList = class(TObjectList<TPomeloEventListener>)
-  public
-    destructor Destroy; override;
-  end;
-
   TPomeloClient = class(TObject)
   private
     FHost: String;
@@ -61,9 +78,9 @@ type
     FOnRequest: TPomeloClientOnRequest;
     FOnConnect: TPomeloClientOnConnect;
     FOnNotify: TPomeloClientOnNotify;
-    FHostAddress: SOCKADDR_IN;
+    FHostAddress: sockaddr_in;
     Client: Ppc_client_t;  //libpomelo client
-    EventListener: TPomeloEventListenerObjList;
+    Requests: TPomeloRequestList;
     procedure DeInitialize; // destroy libpomelo client
     procedure SetHost(Value: String);
     procedure SetPort(Value: Integer);
@@ -74,6 +91,7 @@ type
     function Initialize: pc_client_state;
     function Connect: Boolean; overload;
     function Connect(Address: String; Port: Integer): Boolean; overload;
+    procedure Disconnect;
     procedure Stop;
 
     function Request(Route: String; Msg: Pjson_t): TPomeloRequest; overload;
@@ -81,10 +99,10 @@ type
     function Request(Route: String; Msg: Pjson_t; OnRequest: TPomeloClientOnRequest): TPomeloRequest; overload;
     function Request(Route: String; Msg: Pjson_t; Data: Pointer; OnRequest: TPomeloClientOnRequest): TPomeloRequest; overload;
 
-    function AddListener(Event: String): TPomeloEventListener; overload;
-    function AddListener(Event: String; OnEvent: TPomeloClientOnEvent): TPomeloEventListener; overload;
+    procedure AddListener(Event: String); overload;
+    procedure AddListener(Event: String; OnEvent: TPomeloClientOnEvent); overload;
     procedure RemoveListener(Event: String); overload;
-    procedure RemoveListener(EventListener: TPomeloEventListener); overload;
+    procedure RemoveListener; overload;
 
     procedure EmitEvent(Event: String; Data: Pointer);
     function Notify(Request: Ppc_notify_t; Route: String; Msg: PJson_t; OnNotify: TPomeloClientOnNotify): Integer; overload;
@@ -102,9 +120,6 @@ type
 implementation
 
 { TPomeloClient }
-
-uses
-  System.Classes;
 
 type
   TPomeloEventListenerList = class
@@ -132,7 +147,8 @@ var
   PomeloClient: TPomeloClient;
   PomeloRequest: TPomeloRequest;
 begin
-  if (Assigned(req.data)) and (TObject(req.data).ClassType = TPomeloRequest) then
+  if Assigned(req.data) then
+    if (TObject(req.data).ClassType = TPomeloRequest) then
   begin
     // Get the request and the client
     PomeloRequest := TPomeloRequest(req.data);
@@ -143,7 +159,7 @@ begin
       req.data := PomeloRequest.Data;
       PomeloRequest.OnRequest(PomeloClient, req, status, resp);
     end;
-    PomeloRequest.Free;
+    PomeloClient.Requests.Remove(PomeloRequest)
   end;
 
   // release relative resource with pc_request_t
@@ -175,7 +191,7 @@ begin
   pc_connect_req_destroy(req);
 end;
 
-procedure on_event_cb(client: Ppc_client_t; const char: PAnsiChar; data: Pointer); cdecl;
+procedure on_event_cb(client: Ppc_client_t; const char: MarshaledAString; data: Pointer); cdecl;
 var
   List: TStringList;
   Event: String;
@@ -231,8 +247,9 @@ begin
   begin
     // Create a connection request
     RequestConnect := TPomeloConnect.Create;
-    RequestConnect.Request := pc_connect_req_new(FHostAddress);
+    RequestConnect.Request := pc_connect_req_new(@FHostAddress);
     RequestConnect.Request.data := RequestConnect;
+    RequestConnect.PomeloClient := Self;
 
     // connect with the connection request
     if pc_client_connect2(client, RequestConnect.Request, on_connected) <> 0 then
@@ -246,7 +263,7 @@ begin
   end
   else
     // try to connect to server.
-    if pc_client_connect(Client, FHostAddress) <> 0 then
+    if pc_client_connect(Client, @FHostAddress) <> 0 then
     begin
       DeInitialize;
       Result := False;
@@ -256,69 +273,76 @@ begin
   Result := True;
 end;
 
-function TPomeloClient.AddListener(Event: String): TPomeloEventListener;
+procedure TPomeloClient.AddListener(Event: String);
 begin
-  Result := AddListener(Event, TPomeloClientOnEvent(NIL));
+  AddListener(Event, TPomeloClientOnEvent(NIL));
 end;
 
-function TPomeloClient.AddListener(Event: String;
-  OnEvent: TPomeloClientOnEvent): TPomeloEventListener;
+procedure TPomeloClient.AddListener(Event: String;
+  OnEvent: TPomeloClientOnEvent);
 var
   PomeloEvent: TPomeloEventListener;
+  Marshall: TMarshaller;
 begin
   PomeloEvent := TPomeloEventListener.Create;
   PomeloEvent.OnEvent := OnEvent;
   PomeloEvent.PomeloClient := Self;
   PomeloEvent.Event := Event;
-  PomeloEventListenerList.Add(Event, PomeloEvent);
-  pc_add_listener(client, PAnsiChar(AnsiString(Event)), on_event_cb);
-  Result := PomeloEvent;
+  PomeloEventListenerList.Add(Event, PomeloEvent); // add to global list
+  pc_add_listener(client, Marshall.AsAnsi(Event).ToPointer, on_event_cb);
 end;
 
 function TPomeloClient.Connect(Address: String; Port: Integer): Boolean;
 begin
-  Host := Address;
   Self.Port := Port;
+  Host := Address;
   Result := Connect;
 end;
 
 constructor TPomeloClient.Create;
 begin
+  FillChar(FHostAddress, SizeOf(FHostAddress), 0);
   FHostAddress.sin_family := AF_INET;
   PomeloClientList.Add(Self);
-  EventListener := TPomeloEventListenerObjList.Create;
+  Requests := TPomeloRequestList.Create;
 end;
 
 procedure TPomeloClient.DeInitialize;
 begin
+  RemoveListener;
   if Assigned(Client) then
   begin
-     pc_client_stop(Client);
-     pc_client_destroy(Client);
-     Client := NIL;
+    //pc_client_stop(Client);
+    pc_client_destroy(Client);
+    Client := NIL;
   end;
 end;
 
 destructor TPomeloClient.Destroy;
 begin
-  EventListener.Free;
+  Requests.Free;
   PomeloClientList.Remove(Self);
   DeInitialize;
   inherited;
 end;
 
 
-procedure TPomeloClient.EmitEvent(Event: String; Data: Pointer);
+procedure TPomeloClient.Disconnect;
 begin
-  pc_emit_event(Client, PAnsiChar(AnsiString(Event)), Data);
+  DeInitialize;
+end;
+
+procedure TPomeloClient.EmitEvent(Event: String; Data: Pointer);
+var
+  Marshall: TMarshaller;
+begin
+  pc_emit_event(Client, Marshall.AsAnsi(Event).ToPointer, Data);
 end;
 
 function TPomeloClient.Initialize: pc_client_state;
 begin
-  if Assigned(Client) then
-    DeInitialize;
-
-  Client := pc_client_new;
+  if not Assigned(Client) then
+    Client := pc_client_new;
   Result := Client.state;
 end;
 
@@ -348,37 +372,40 @@ procedure TPomeloClient.RemoveListener(Event: String);
 var
   List: TStringList;
   EventListener: TPomeloEventListener;
-  Index: Integer;
-begin
-  List := PomeloEventListenerList.LockList;
-  try
-    Index := List.IndexOf(Event);
-    if Index <> -1 then
-    begin
-      EventListener := List.Objects[Index] as TPomeloEventListener;
-      List.Delete(Index);
-      pc_remove_listener(Client, PAnsiChar(AnsiString(EventListener.Event)), on_event_cb);
-      EventListener.Free;
-    end;
-  finally
-    PomeloEventListenerList.UnlockList;
-  end;
-end;
-
-procedure TPomeloClient.RemoveListener(EventListener: TPomeloEventListener);
-var
-  List: TStringList;
+  Marshall: TMarshaller;
   I: Integer;
 begin
   List := PomeloEventListenerList.LockList;
   try
     for I := List.Count - 1 Downto 0 do
-      if List.Objects[I] = EventListener then
+      if (List[I] = Event) and (TPomeloEventListener(List.Objects[I]).PomeloClient = Self) then
       begin
+        EventListener := List.Objects[I] as TPomeloEventListener;
+        pc_remove_listener(Client, Marshall.AsAnsi(EventListener.Event).ToPointer, on_event_cb);
         List.Delete(I);
-        pc_remove_listener(Client, PAnsiChar(AnsiString(EventListener.Event)), on_event_cb);
         EventListener.Free;
-        Break;
+      end;
+  finally
+    PomeloEventListenerList.UnlockList;
+  end;
+end;
+
+procedure TPomeloClient.RemoveListener;
+var
+  List: TStringList;
+  EventListener: TPomeloEventListener;
+  Marshall: TMarshaller;
+  I: Integer;
+begin
+  List := PomeloEventListenerList.LockList;
+  try
+    for I := List.Count - 1 Downto 0 do
+      if TPomeloEventListener(List.Objects[I]).PomeloClient = Self then
+      begin
+        EventListener := List.Objects[I] as TPomeloEventListener;
+        pc_remove_listener(Client, Marshall.AsAnsi(EventListener.Event).ToPointer, on_event_cb);
+        List.Delete(I);
+        EventListener.Free;
       end;
   finally
     PomeloEventListenerList.UnlockList;
@@ -390,6 +417,7 @@ function TPomeloClient.Request(Route: String; Msg: Pjson_t; Data: Pointer;
 var
   PomeloRequest: TPomeloRequest;
   Request: Ppc_request_t;
+  Marshall: TMarshaller;
 begin
   PomeloRequest := TPomeloRequest.Create;
   PomeloRequest.PomeloClient := Self;
@@ -397,14 +425,17 @@ begin
   PomeloRequest.OnRequest := OnRequest;
   Request := pc_request_new;
   Request.data := PomeloRequest;
-  pc_request(Client, Request, PAnsiChar(AnsiString(Route)), Msg, on_request_cb);
+  Requests.Add(PomeloRequest);
+  pc_request(Client, Request, Marshall.AsAnsi(Route).ToPointer, Msg, on_request_cb);
   Result := PomeloRequest;
 end;
 
 procedure TPomeloClient.SetHost(Value: String);
+var
+  Marshall: TMarshaller;
 begin
   FHost := Value;
-  FHostAddress.sin_addr.s_addr := inet_addr(PAnsiChar(AnsiString(Value)));
+  FHostAddress.sin_addr.s_addr := inet_addr(Marshall.AsAnsi(Value).ToPointer);
 end;
 
 procedure TPomeloClient.SetPort(Value: Integer);
@@ -481,20 +512,6 @@ end;
 procedure TPomeloEventListenerList.UnlockList;
 begin
   TMonitor.Exit(FLock);
-end;
-
-{ TPomeloEventObjList }
-
-destructor TPomeloEventListenerObjList.Destroy;
-var
-  Event: TPomeloEventListener;
-begin
-  for Event in Self do
-  begin
-    PomeloEventListenerList.Remove(Event.Event);
-    Event.PomeloClient.RemoveListener(Event);
-  end;
-  inherited;
 end;
 
 initialization
