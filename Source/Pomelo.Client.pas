@@ -1,5 +1,5 @@
 {**
- * Pomelo.Client.pas v0.2 - An object oriented Pomelo client interface for Delphi
+ * Pomelo.Client.pas v0.3 - An object oriented Pomelo client interface for Delphi
  *
  * Copyright (c) 2014 Dennis D. Spreen (dennis@spreendigital.de)
  * MIT Licensed.
@@ -11,7 +11,7 @@ unit Pomelo.Client;
 interface
 
 uses
-  System.Classes, Generics.Defaults, Generics.Collections, Pomelo.Lib, Pomelo.Jansson, System.SysUtils,
+  System.Classes, System.Types, Generics.Defaults, Generics.Collections, Pomelo.Lib, Pomelo.Jansson, System.SysUtils,
 
 // ***********************************
 // Windows units
@@ -54,7 +54,12 @@ type
     OnRequest: TPomeloClientOnRequest;
   end;
 
-  TPomeloRequestList = class(TObjectList<TPomeloRequest>);
+  TPomeloNotify = class
+    Notify: Ppc_notify_t;
+    PomeloClient: TPomeloClient;
+    Data: Pointer;
+    OnNotify: TPomeloClientOnNotify;
+  end;
 
 
   TPomeloConnect = class
@@ -80,7 +85,8 @@ type
     FOnNotify: TPomeloClientOnNotify;
     FHostAddress: sockaddr_in;
     Client: Ppc_client_t;  //libpomelo client
-    Requests: TPomeloRequestList;
+    Requests: TThreadList<TPomeloRequest>;
+    Notifies: TThreadList<TPomeloNotify>;
     procedure DeInitialize; // destroy libpomelo client
     procedure SetHost(Value: String);
     procedure SetPort(Value: Integer);
@@ -105,7 +111,11 @@ type
     procedure RemoveListener; overload;
 
     procedure EmitEvent(Event: String; Data: Pointer);
-    function Notify(Request: Ppc_notify_t; Route: String; Msg: PJson_t; OnNotify: TPomeloClientOnNotify): Integer; overload;
+
+    function Notify(Route: String; Msg: PJson_t): TPomeloNotify; overload;
+    function Notify(Route: String; Msg: PJson_t; Data: Pointer): TPomeloNotify; overload;
+    function Notify(Route: String; Msg: PJson_t; OnNotify: TPomeloClientOnNotify): TPomeloNotify; overload;
+    function Notify(Route: String; Msg: PJson_t; Data: Pointer; OnNotify: TPomeloClientOnNotify): TPomeloNotify; overload;
 
     property Host: String read FHost write SetHost;
     property Port: Integer read FPort write SetPort;
@@ -168,6 +178,33 @@ begin
   pc_request_destroy(req);
 end;
 
+// notify callback
+procedure on_notify_cb(notify: Ppc_notify_t; status: Integer);cdecl;
+var
+  Msg: Pjson_t;
+  PomeloClient: TPomeloClient;
+  PomeloNotify: TPomeloNotify;
+begin
+  if Assigned(notify.data) then
+    if (TObject(notify.data).ClassType = TPomeloNotify) then
+  begin
+    // Get the notify and the client
+    PomeloNotify := TPomeloNotify(notify.data);
+    PomeloClient := PomeloNotify.PomeloClient;
+    if Assigned(PomeloNotify.OnNotify) then
+    begin
+      // Change notify data to original attached data
+      notify.data := PomeloNotify.Data;
+      PomeloNotify.OnNotify(PomeloClient, notify, status);
+    end;
+    PomeloClient.Notifies.Remove(PomeloNotify)
+  end;
+
+  // release relative resource with pc_notify_t
+  Msg := notify.msg;
+  json_decref(Msg);
+  pc_notify_destroy(notify);
+end;
 
 procedure on_connected(req: Ppc_connect_t; status: Integer); cdecl;
 var
@@ -304,7 +341,8 @@ begin
   FillChar(FHostAddress, SizeOf(FHostAddress), 0);
   FHostAddress.sin_family := AF_INET;
   PomeloClientList.Add(Self);
-  Requests := TPomeloRequestList.Create;
+  Requests := TThreadList<TPomeloRequest>.Create;
+  Notifies := TThreadList<TPomeloNotify>.Create;
 end;
 
 procedure TPomeloClient.DeInitialize;
@@ -319,10 +357,35 @@ begin
 end;
 
 destructor TPomeloClient.Destroy;
+var
+  NotifyList: TList<TPomeloNotify>;
+  RequestList: TList<TPomeloRequest>;
+  Notify: TPomeloNotify;
+  Request: TPomeloRequest;
 begin
-  Requests.Free;
   PomeloClientList.Remove(Self);
   DeInitialize;
+
+  // Cleanup undelivered notifies
+  NotifyList := Notifies.LockList;
+  try
+    for Notify in NotifyList do
+      Notify.Free;
+  finally
+    Notifies.UnlockList;
+  end;
+  Notifies.Free;
+
+  // Cleanup undelivered requests
+  RequestList := Requests.LockList;
+  try
+    for Request in RequestList do
+      Request.Free;
+  finally
+    Requests.UnlockList;
+  end;
+  Requests.Free;
+
   inherited;
 end;
 
@@ -346,10 +409,38 @@ begin
   Result := Client.state;
 end;
 
-function TPomeloClient.Notify(Request: Ppc_notify_t; Route: String;
-  Msg: PJson_t; OnNotify: TPomeloClientOnNotify): Integer;
+function TPomeloClient.Notify(Route: String; Msg: PJson_t): TPomeloNotify;
 begin
+  Result := Notify(Route, Msg, NIL, OnNotify);
+end;
 
+function TPomeloClient.Notify(Route: String; Msg: PJson_t;
+  Data: Pointer): TPomeloNotify;
+begin
+  Result := Notify(Route, Msg, Data, OnNotify);
+end;
+
+function TPomeloClient.Notify(Route: String; Msg: PJson_t;
+  OnNotify: TPomeloClientOnNotify): TPomeloNotify;
+begin
+  Result := Notify(Route, Msg, NIL, OnNotify);
+end;
+
+function TPomeloClient.Notify(Route: String; Msg: PJson_t; Data: Pointer; OnNotify: TPomeloClientOnNotify): TPomeloNotify;
+var
+  PomeloNotify: TPomeloNotify;
+  Notify: Ppc_notify_t;
+  Marshall: TMarshaller;
+begin
+  PomeloNotify := TPomeloNotify.Create;
+  PomeloNotify.PomeloClient := Self;
+  PomeloNotify.Data := Data;
+  PomeloNotify.OnNotify := OnNotify;
+  Notify := pc_notify_new;
+  Notify.data := PomeloNotify;
+  Notifies.Add(PomeloNotify);
+  pc_notify(Client, Notify, Marshall.AsAnsi(Route).ToPointer, Msg, on_notify_cb);
+  Result := PomeloNotify;
 end;
 
 function TPomeloClient.Request(Route: String; Msg: Pjson_t): TPomeloRequest;

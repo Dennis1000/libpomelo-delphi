@@ -83,35 +83,6 @@ type
   u_short = Word;
   u_long = Longint;
   u_char = Byte; //AnsiChar;
-{
-  TSunB = packed record
-    s_b1, s_b2, s_b3, s_b4: Byte; //u_char;
-  end;
-
-  TSunW = packed record
-    s_w1, s_w2: word; // u_short;
-  end;
-
-  PInAddr = ^TInAddr;
-  in_addr = packed record
-    case integer of
-      0: (S_un_b: TSunB);
-      1: (S_un_w: TSunW);
-      2: (S_addr: LongWord);
-  end;
-  TInAddr = in_addr;
-
-  PSockAddrIn = ^sockaddr_in;
-  sockaddr_in = packed record
-    sin_family: u_short;
-    sin_family: u_short;
-    sin_port: u_short;
-    sin_addr: TSunB;
-    sin_zero: array[0..7] of u_char;
-  end;
-}
-
-  //TSockAddr_in = sockaddr_in;
 
   {**
    * It should be possible to cast uv_buf_t[] to WSABUF[]
